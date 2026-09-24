@@ -1,0 +1,24 @@
+{
+  "name": "tokensurfers-web",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
+    "@supabase/supabase-js": "^2.101.1",
+    "bcryptjs": "^3.0.3",
+    "next": "^15.3.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
+    "@types/node": "^22.15.3",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "typescript": "^5.8.3"
+  }
+}

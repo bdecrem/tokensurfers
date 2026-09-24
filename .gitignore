@@ -1,0 +1,15 @@
+# secrets
+ios/TokenSurfers/App/Secrets.swift
+.env
+.env.local
+*.p8
+*.mobileprovision
+# build output
+ios/build/
+ios/build-*/
+ios/.shots/
+web/.next/
+web/node_modules/
+web/next-env.d.ts
+web/tsconfig.tsbuildinfo
+.DS_Store

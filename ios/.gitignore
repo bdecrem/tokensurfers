@@ -1,0 +1,4 @@
+TokenSurfers/App/Secrets.swift
+build/
+build-*/
+.shots/
