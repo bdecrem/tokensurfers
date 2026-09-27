@@ -14,7 +14,15 @@ import CoreGraphics
 ///
 /// Plain class (not @Observable): the view pulls state every frame.
 final class SurfEngine {
-    enum Kind { case coin, train, rampTrain, barrier, gate, bug }
+    enum Kind { case coin, train, rampTrain, barrier, gate, bug, power }
+
+    /// Pickups that float in the gaps between track pieces.
+    enum Power: Int, CaseIterable {
+        case magnet, double, shield, rocket
+        var emoji: String { ["🧲", "💰", "🛡️", "🚀"][rawValue] }
+        var title: String { ["MAGNET", "DOUBLE TOKENS", "GIT REVERT ARMED", "ROCKET"][rawValue] }
+        var seconds: Double { [9, 10, 0, 6][rawValue] }
+    }
 
     struct Entity {
         var kind: Kind
@@ -30,6 +38,7 @@ final class SurfEngine {
         var phase: Double = 0
         var token = false        // coin born from a streamed token
         var tool = false         // train born from a tool call (terminal livery)
+        var power: Power = .magnet
     }
 
     struct Particle { var x, y, vx, vy, life, hue, spin: Double }
@@ -40,6 +49,18 @@ final class SurfEngine {
     static let rampLen = 3.4
     static let carLen = 9.0
     static let viewDepth = 96.0
+    static let rocketY = 3.6
+
+    /// Scenes: the backdrop's palette changes every `sceneLength` metres,
+    /// cross-fading over the first 50 (see ScenePalette in the renderer).
+    static let sceneLength = 650.0
+    static let sceneNames = ["GOLDEN HOUR", "NIGHT SHIFT", "VAPORWAVE", "SERVER ROOM"]
+    var sceneNow: Int { sceneFixed ?? Int(distance / Self.sceneLength) % Self.sceneNames.count }
+    var scenePrev: Int { sceneFixed ?? max(0, Int(distance / Self.sceneLength) - 1) % Self.sceneNames.count }
+    var sceneBlend: Double { sceneFixed != nil || distance < Self.sceneLength ? 1 : min(1, distance.truncatingRemainder(dividingBy: Self.sceneLength) / 50) }
+    /// TS_SCENE_FIXED=n: one scene for the whole run (perf comparisons at equal distance).
+    var sceneFixed: Int? = ProcessInfo.processInfo.environment["TS_SCENE_FIXED"].flatMap(Int.init)
+    private var lastScene = 0
 
     // Player
     private(set) var lane = 0
@@ -80,6 +101,14 @@ final class SurfEngine {
     private var coinScore = 0
     var multiplier: Int { 1 + min(4, streak / 25) }
 
+    // Powers (seconds left; the shield is a single charge)
+    private(set) var magnet = 0.0
+    private(set) var double = 0.0
+    private(set) var rocket = 0.0
+    private(set) var shield = false
+    private var nextPowerAt = 220.0     // metres
+    private var coinValue: Int { 10 * multiplier * (double > 0 ? 2 : 1) }
+
     // Agent feed
     private var tokenBank = 0.0
     private var tokenFlow = 0.0
@@ -114,13 +143,13 @@ final class SurfEngine {
         onSound?(.swipe)
     }
     func jump() {
-        guard canAct, !airborne else { return }
+        guard canAct, !airborne, rocket <= 0 else { return }
         vy = 8.2
         rolling = 0
         onSound?(.jump)
     }
     func roll() {
-        guard canAct else { return }
+        guard canAct, rocket <= 0 else { return }
         if airborne { vy = -18 }
         rolling = 0.62
         onSound?(.roll)
@@ -136,6 +165,8 @@ final class SurfEngine {
         score = 0; coins = 0; streak = 0; bumps = 0; stomps = 0; coinScore = 0
         confetti.removeAll()
         lastEvent = nil
+        magnet = 0; double = 0; rocket = 0; shield = false
+        nextPowerAt = 220; lastScene = 0
         runs += 1
     }
 
@@ -207,9 +238,26 @@ final class SurfEngine {
         if !over {
             let prevGround = ground
             ground = surfaceHeight()
-            // Vertical motion: gravity when above the surface, otherwise sit on it
-            // (a ramp pushes you up; a roof that ends drops you).
-            if y > ground + 0.001 || vy > 0 {
+            magnet = max(0, magnet - dt)
+            double = max(0, double - dt)
+            if sceneNow != lastScene {
+                lastScene = sceneNow
+                lastEvent = (Self.sceneNames[sceneNow], time)
+                onSound?(.streak)
+            }
+            // Vertical motion: flying on the rocket; else gravity when above the
+            // surface, otherwise sit on it (a ramp pushes you up; a roof that ends drops you).
+            if rocket > 0 {
+                // flying: ease up to cruising height, above every roof and sign
+                rocket -= dt
+                y += (Self.rocketY - y) * min(1, dt * 5)
+                vy = 0
+                if rocket <= 0 {
+                    rocket = 0
+                    invulnerable = max(invulnerable, 1.2)   // a grace beat to land
+                    lastEvent = ("TOUCHDOWN", time)
+                }
+            } else if y > ground + 0.001 || vy > 0 {
                 vy -= 27 * dt
                 y += vy * dt
                 if y <= ground {
@@ -228,7 +276,7 @@ final class SurfEngine {
             invulnerable = max(0, invulnerable - dt)
 
             lay()
-            if autopilot { autopilotStep() }
+            if autopilot, rocket <= 0 { autopilotStep() }
             collide()
         }
         stepConfetti(dt)
@@ -239,13 +287,13 @@ final class SurfEngine {
     /// What would hurt at ground level in a lane, nearest first, within `range`.
     private func hazards(_ lane: Int, range: Double) -> [Entity] {
         entities.filter { e in
-            !e.dead && e.lane == lane && e.z > -0.75 && e.z < range && e.kind != .coin
+            !e.dead && e.lane == lane && e.z > -0.75 && e.z < range && e.kind != .coin && e.kind != .power
         }.sorted { $0.z < $1.z }
     }
 
     private func laneClear(_ lane: Int, _ range: Double) -> Bool {
         !entities.contains { e in
-            !e.dead && e.lane == lane && e.kind != .coin && e.kind != .bug && e.z < range && e.z + e.length > -0.6
+            !e.dead && e.lane == lane && e.kind != .coin && e.kind != .bug && e.kind != .power && e.z < range && e.z + e.length > -0.6
         }
     }
 
@@ -256,7 +304,7 @@ final class SurfEngine {
     /// react to. -1 = a train body already beside us (switching bumps).
     private func laneDanger(_ l: Int) -> Double {
         var d = 99.0
-        for e in entities where !e.dead && e.lane == l && e.kind != .coin {
+        for e in entities where !e.dead && e.lane == l && e.kind != .coin && e.kind != .power {
             switch e.kind {
             case .train, .rampTrain:
                 if e.z <= 0.4 && e.z + e.length > -0.6 {
@@ -269,7 +317,7 @@ final class SurfEngine {
                 if e.z > -0.4 && e.z < 2.0 { d = min(d, e.z) }
             case .bug:
                 if e.z > -0.4 && e.z < 1.5 { d = min(d, e.z) }
-            case .coin:
+            case .coin, .power:
                 break
             }
         }
@@ -286,7 +334,7 @@ final class SurfEngine {
         if let (_, t) = under, y >= Self.trainH - 0.5 {
             let end = t.z + t.length
             if end < 4 {
-                let after = entities.filter { !$0.dead && $0.lane == lane && $0.kind != .coin && $0.z >= end - 0.5 && $0.z < end + 9 }
+                let after = entities.filter { !$0.dead && $0.lane == lane && $0.kind != .coin && $0.kind != .power && $0.z >= end - 0.5 && $0.z < end + 9 }
                 if !after.isEmpty {
                     let options = [lane - 1, lane + 1].filter { (-1...1).contains($0) }
                     if let l = options.max(by: { laneDanger($0) < laneDanger($1) }), laneDanger(l) > 8 {
@@ -326,7 +374,7 @@ final class SurfEngine {
                         jump()
                     }
                 }
-            case .rampTrain, .train, .coin:
+            case .rampTrain, .train, .coin, .power:
                 break
             }
             return
@@ -380,6 +428,7 @@ final class SurfEngine {
                 len = layChunk(at: chunkCursor)
             }
             let gap = max(6, 11 - distance / 600)
+            if distance + chunkCursor + len >= nextPowerAt { layPower(at: chunkCursor + len + gap / 2) }
             chunkCursor += len + gap
         }
         layTokenCoins()
@@ -388,7 +437,7 @@ final class SurfEngine {
 
     private func occupied(_ lane: Int, _ z0: Double, _ z1: Double) -> Bool {
         entities.contains { e in
-            !e.dead && e.lane == lane && e.kind != .coin && e.kind != .bug && e.z < z1 && e.z + e.length > z0
+            !e.dead && e.lane == lane && e.kind != .coin && e.kind != .bug && e.kind != .power && e.z < z1 && e.z + e.length > z0
         }
     }
 
@@ -535,6 +584,57 @@ final class SurfEngine {
         }
     }
 
+    /// Test hooks (TS_POWER / TS_SCENE in the simulator).
+    func grant(_ p: Power) { activate(p) }
+    func skip(toScene n: Int) {
+        distance = Double(n) * Self.sceneLength + 60
+        lastScene = sceneNow
+        nextPowerAt = distance + 150
+    }
+
+    /// One pickup in the gap after a piece, in a lane nothing parks or rolls into.
+    private func layPower(at z: Double) {
+        for lane in lanes() where !occupied(lane, z - 2, z + 2)
+            && !entities.contains(where: { $0.lane == lane && $0.speed != 0 && !$0.dead }) {
+            let r = rng.unit()
+            let kind: Power = r < 0.3 ? .magnet : r < 0.6 ? .double : r < 0.8 ? .shield : .rocket
+            entities.append(Entity(kind: .power, lane: lane, z: z, length: 0.5, y: 0.8, power: kind))
+            nextPowerAt = distance + z + 380 + rng.unit() * 260
+            return
+        }
+    }
+
+    private func activate(_ p: Power) {
+        switch p {
+        case .magnet: magnet = p.seconds
+        case .double: double = p.seconds
+        case .shield: shield = true
+        case .rocket:
+            rocket = p.seconds
+            rolling = 0
+            layRocketCoins()
+        }
+        lastEvent = (p.title, time)
+        onSound?(.celebrate)
+    }
+
+    /// A zigzag of coins at cruising height for the length of the flight.
+    private func layRocketCoins() {
+        var lane = self.lane
+        var z = 5.0
+        let end = min(Self.viewDepth - 4, Power.rocket.seconds * max(speed, 11) - 6)
+        var run = 0
+        while z < end {
+            entities.append(Entity(kind: .coin, lane: lane, z: z, y: Self.rocketY + 0.6))
+            z += 1.5
+            run += 1
+            if run >= 7 {
+                run = 0
+                lane = max(-1, min(1, lane + (lane == 1 ? -1 : lane == -1 ? 1 : (rng.unit() < 0.5 ? -1 : 1))))
+            }
+        }
+    }
+
     private func layBugs() {
         guard pendingBugs > 0 else { return }
         let l = lanes()
@@ -551,17 +651,20 @@ final class SurfEngine {
         let h = Self.trainH
         for i in entities.indices where !entities[i].dead {
             let e = entities[i]
-            guard e.lane == lane else { continue }
             let overlaps = e.z < 0.45 && e.z + e.length > -0.45
             guard overlaps else { continue }
+            // the magnet pulls every coin level with you or above in (the renderer flies them over)
+            let pulled = magnet > 0 && e.kind == .coin && e.y > y - 0.5
+            guard e.lane == lane || pulled else { continue }
+            if rocket > 0, e.kind != .coin, e.kind != .power { continue }   // flying over it all
 
             switch e.kind {
             case .coin:
-                if abs(y + 0.6 - e.y) < 1.0, abs(x - Double(lane) * Self.laneWidth) < 0.7 {
+                if pulled || (abs(y + 0.6 - e.y) < 1.0 && abs(x - Double(lane) * Self.laneWidth) < 0.7) {
                     entities[i].dead = true
                     coins += 1
                     streak += 1
-                    coinScore += 10 * multiplier
+                    coinScore += coinValue
                     if streak % 25 == 0 { lastEvent = ("x\(multiplier)", time); onSound?(.streak) }
                     onSound?(.coin)
                 }
@@ -570,13 +673,20 @@ final class SurfEngine {
                 if vy < 0 && y > 0.05 {
                     entities[i].dead = true
                     stomps += 1
-                    coinScore += 250 * multiplier
+                    let bonus = 250 * multiplier * (double > 0 ? 2 : 1)
+                    coinScore += bonus
                     vy = 6.5
-                    lastEvent = ("SQUASHED  +\(250 * multiplier)", time)
+                    lastEvent = ("SQUASHED  +\(bonus)", time)
                     onSound?(.stomp)
                 } else if y < 0.45 && invulnerable <= 0 {
                     bump(back: false)
                     lastEvent = ("BITTEN", time)
+                }
+
+            case .power:
+                if abs(y + 0.6 - e.y) < 1.3 {
+                    entities[i].dead = true
+                    activate(e.power)
                 }
 
             case .barrier:
@@ -619,8 +729,22 @@ final class SurfEngine {
 
     private func die() {
         guard !over else { return }
+        if shield {
+            // git revert: whatever hit you is gone, the run goes on
+            shield = false
+            for i in entities.indices where !entities[i].dead && entities[i].lane == lane && entities[i].kind != .coin
+                && entities[i].z < 2 && entities[i].z + entities[i].length > -1.5 {
+                entities[i].dead = true
+            }
+            invulnerable = max(invulnerable, 1.2)
+            speed *= 0.8
+            burst(28)
+            lastEvent = ("REVERTED", time)
+            onSound?(.stomp)
+            return
+        }
         if autopilot {
-            let near = entities.filter { !$0.dead && $0.z > -3 && $0.z < 6 && $0.kind != .coin }
+            let near = entities.filter { !$0.dead && $0.z > -3 && $0.z < 6 && $0.kind != .coin && $0.kind != .power }
                 .map { "\($0.kind)@\($0.lane) z\(String(format: "%.1f", $0.z)) len\(Int($0.length))" }
             botLog.append(String(format: "DEATH t=%.1f lane %d y %.2f stumble %.2f vy %.1f at %.0f m: ", time, lane, y, stumble, vy, distance) + near.joined(separator: ", "))
             print("[bot] " + botLog.last!)
@@ -630,6 +754,15 @@ final class SurfEngine {
         streak = 0
         onSound?(.crash)
         onGameOver?(score)
+    }
+
+    /// A small pop of confetti from the middle of the screen.
+    private func burst(_ n: Int) {
+        for _ in 0..<n {
+            confetti.append(Particle(x: 0.5 + (rng.unit() - 0.5) * 0.2, y: 0.62,
+                                     vx: (rng.unit() - 0.5) * 0.9, vy: -0.35 - rng.unit() * 0.4,
+                                     life: 1.2 + rng.unit() * 0.6, hue: rng.unit(), spin: rng.unit() * 6))
+        }
     }
 
     private func stepConfetti(_ dt: Double) {

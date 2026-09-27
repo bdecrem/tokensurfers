@@ -19,6 +19,7 @@ struct GalleryApp: Identifiable, Decodable, Equatable {
     let prompt: String
     let owner: String
     var upvotes: Int
+    var comments: Int? = nil       // older servers have none
     let remixOf: Parent?
     let createdAt: String
     let updatedAt: String

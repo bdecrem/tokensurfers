@@ -149,6 +149,8 @@ struct GalleryAppView: View {
     @State private var pendingVote = false
     @State private var reportSheet = false
     @State private var reported = false
+    @State private var showComments = false
+    var openComments = false         // from the "new for you" card: straight to the comments
     var onOpenProject: (UUID) -> Void
 
     var body: some View {
@@ -170,6 +172,15 @@ struct GalleryAppView: View {
                 .padding(.horizontal, 12).frame(height: 38)
                 .background(Capsule().fill(.white))
                 Spacer(minLength: 0)
+                Button { showComments = true } label: {
+                    Text("💬 \(app.comments ?? 0)")
+                        .font(Theme.black(13)).foregroundStyle(Theme.ink)
+                        .padding(.horizontal, 10).frame(height: 38)
+                        .background(Capsule().fill(.white))
+                        .overlay(Capsule().strokeBorder(Theme.ink, lineWidth: 1.5))
+                }
+                .buttonStyle(SquishStyle())
+                .accessibilityLabel("Comments")
                 Button(action: vote) {
                     Text("▲ \(app.upvotes)")
                         .font(Theme.black(13)).foregroundStyle(app.voted ? .white : Theme.ink)
@@ -182,6 +193,8 @@ struct GalleryAppView: View {
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
             .background(Theme.orange.overlay(PaperGrain(opacity: 0.08)))
+            // on the header, not next to the sign-in sheet below: two .sheet modifiers on one view and only one presents
+            .sheet(isPresented: $showComments) { CommentsSheet(app: app) { n in app.comments = n } }
 
             ZStack {
                 Color.white
@@ -236,14 +249,23 @@ struct GalleryAppView: View {
             Text("We look at every report. Owners can also unpublish their own creations.")
         }
         .task {
+            let t0 = Date()
             do {
                 let full = try await account.fetch(slug: app.slug)
                 html = full.html ?? ""
                 if let s = full.siteUrl { app.siteUrl = s }
                 app.upvotes = full.upvotes
                 app.voted = full.voted
+                app.comments = full.comments
             } catch {
                 self.error = error.localizedDescription
+            }
+            if openComments {
+                // a sheet on a sheet: UIKit drops a presentation started while this one is still animating in,
+                // so wait out the slide (0.5 s at full speed, longer on a busy first launch) before asking
+                let settled = t0.addingTimeInterval(1.0).timeIntervalSinceNow
+                if settled > 0 { try? await Task.sleep(for: .seconds(settled)) }
+                showComments = true
             }
         }
         .sheet(isPresented: $signIn) { AccountSheet { if pendingVote { pendingVote = false; vote() } } }

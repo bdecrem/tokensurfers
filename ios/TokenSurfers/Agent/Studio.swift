@@ -87,6 +87,17 @@ final class Studio {
     private var usedFillers: Set<String> = []
     private var shownCutaways: Set<Cutaway> = []
     private var buildStart = Date()
+    // the warm-up: what's true while the feed is quiet (the model is thinking)
+    private var quietSince = Date()
+    private var warmFacts: [String] = []
+    private var evergreen: [String] = []
+    private var warmTick = 0
+    private var sessionLine: String?
+    private var lastCommand: [String: String] = [:]
+    private var miniApps: Int?
+    private var thinkingText = ""
+    private var lastThoughtAt = Date()
+    private var thinkTokens = 0     // the mini's running estimate for the current think
 
     // the remote engine
     /// The deployed app, when Claude Code on the mini built it.
@@ -95,10 +106,18 @@ final class Studio {
     private(set) var remoteCode = ""
     private(set) var codePath = ""
     private var lastSeq = 0
+    /// The remote feed's half-streamed tool inputs, per tool id: the JSON text so far
+    /// (v2 deltas appended; v1 sends it whole) and each field decoded incrementally.
+    private var inputJSON: [String: String] = [:]
+    private var inputFields: [String: [String: StreamedField]] = [:]
     private var inputSeen: [String: Int] = [:]
+    private var lastDecodedWrite: String?
 
     /// A project built on the mini stays there; a fresh one follows the setting.
     var remote: Bool { project.siteURL != nil || (html.isEmpty && Self.engine == .remote) }
+
+    /// The Studio is on screen: get the narrator's voice loaded before a build needs it.
+    func warmNarrator() { narrator.warm() }
 
     init(store: ProjectStore, project: Project) {
         self.store = store
@@ -127,8 +146,54 @@ final class Studio {
             return
         }
         log(.you(delivered: true), p)
+        if let tape = ProcessInfo.processInfo.environment["TS_REPLAY"] {
+            task = Task { await runReplay(tape, prompt: p) }
+            return
+        }
         let useRemote = remote
         task = Task { if useRemote { await runRemote(p) } else { await run(p) } }
+    }
+
+    /// TS_REPLAY=<feed.json>: replays a recorded event feed (a saved
+    /// `GET events?after=0` response) with its original timing, no mini
+    /// needed — the performance benchmark. TS_REPLAY_SPEED scales the clock.
+    private func runReplay(_ path: String, prompt: String) async {
+        guard let data = FileManager.default.contents(atPath: path),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let raw = obj["events"] as? [[String: Any]] else { failRemote("no feed at \(path)"); return }
+        lastPrompt = prompt
+        phase = .thinking
+        outputTokens = 0; inputTokens = 0; lastBugs = 0; steps = 0
+        usedFillers = []; shownCutaways = []; delivered = []
+        subtitle = ""; liveCode = ""; isPatch = false; inputSeen = [:]; inputJSON = [:]; inputFields = [:]
+        buildStart = .now
+        if !stagePinned { stageTab = .code }
+        setCaption("replaying the tape 📼", speak: false)
+        let speed = Double(ProcessInfo.processInfo.environment["TS_REPLAY_SPEED"] ?? "") ?? 1
+        let events = raw.compactMap { e -> AgentAPI.Event? in
+            guard let seq = e["seq"] as? Int, let type = e["type"] as? String else { return nil }
+            return AgentAPI.Event(seq: seq, type: type, data: e)
+        }
+        let filler = Task { await fillerLoop() }
+        let warm = Task { await warmupLoop() }
+        defer { filler.cancel(); warm.cancel() }
+        agentLog("replay: \(events.count) events from \((path as NSString).lastPathComponent) at \(speed)x")
+        var recap = ""
+        let t0 = (events.first?.data["t"] as? NSNumber)?.doubleValue ?? 0
+        let start = Date()
+        for e in events {
+            let at = (((e.data["t"] as? NSNumber)?.doubleValue ?? t0) - t0) / 1000 / speed
+            let wait = at - Date().timeIntervalSince(start)
+            if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+            if Task.isCancelled { return }
+            let t0 = PerfMeter.frameStart()
+            if let r = apply(e) { recap = r }
+            PerfMeter.applied(t0)
+            if e.type == "idle" { break }
+        }
+        let state = AgentAPI.State(obj["state"] as? [String: Any] ?? [:])
+        agentLog(String(format: "replay done in %.0f s", Date().timeIntervalSince(start)))
+        finishRemote(recap: recap.isEmpty ? (state.recap ?? "replayed") : recap, state: state)
     }
 
     /// Take a queued note back before Splat sees it.
@@ -427,13 +492,14 @@ final class Studio {
         subtitle = ""
         liveCode = ""
         isPatch = false
-        inputSeen = [:]
+        inputSeen = [:]; inputJSON = [:]; inputFields = [:]
         buildStart = .now
         if !stagePinned { stageTab = .code }
         setCaption(project.builds == 0 ? "so it's \(clockString()). new app just dropped" : "they said: \(shortPrompt(prompt))", speak: true)
         agentLog("build on the mini: \(shortPrompt(prompt)) → \(AgentAPI.base().host ?? "?")")
         let filler = Task { await fillerLoop() }
-        defer { filler.cancel() }
+        let warm = Task { await warmupLoop() }
+        defer { filler.cancel(); warm.cancel() }
         do {
             let (seq, _) = try await AgentAPI.state(project.id)
             lastSeq = seq
@@ -442,6 +508,14 @@ final class Studio {
             }
         } catch {
             guard !Task.isCancelled else { return }
+            if error.localizedDescription.contains("out of tokens") {
+                // the day's allowance: plain words, no bugs on the track
+                phase = .failed(error.localizedDescription)
+                setCaption("out of tokens for today 🫠", speak: true)
+                subtitle = error.localizedDescription
+                task = nil
+                return
+            }
             failRemote(error.localizedDescription)
             return
         }
@@ -459,7 +533,8 @@ final class Studio {
             buildStart = .now
             agentLog("attached to a running build at seq \(r.seq)")
             let filler = Task { await fillerLoop() }
-            defer { filler.cancel() }
+            let warm = Task { await warmupLoop() }
+            defer { filler.cancel(); warm.cancel() }
             await followRemote()
         }
     }
@@ -474,11 +549,13 @@ final class Studio {
                 failures = 0
                 lastSeq = poll.seq
                 var idle = false
+                let t0 = PerfMeter.frameStart()
                 for e in poll.events {
                     if let r = apply(e) { recap = r }
                     if e.type == "idle" { idle = true }
                     if e.type == "error" { return }
                 }
+                if !poll.events.isEmpty { PerfMeter.applied(t0) }
                 if idle || (!poll.state.running && poll.events.isEmpty) {
                     finishRemote(recap: recap.isEmpty ? (poll.state.recap ?? "it's live. go look.") : recap, state: poll.state)
                     return
@@ -529,10 +606,33 @@ final class Studio {
     /// One server event → the same screen state the local loop drives. Returns a recap when the event carries one.
     private func apply(_ e: AgentAPI.Event) -> String? {
         let d = e.data
+        if ["text", "say", "tool_input", "tool_call", "file", "deployed", "note_in"].contains(e.type) { quietSince = .now }
         switch e.type {
+        case "start":
+            let resumed = d["resumed"] as? Bool ?? false
+            warmFacts.append(resumed ? "session resumed on the mini · it remembers this app" : "fresh workspace on the mini · surf-\(project.id.uuidString.lowercased().prefix(8))")
+        case "session":
+            let id = (d["sessionId"] as? String ?? "").prefix(8)
+            let model = d["model"] as? String ?? "claude"
+            let tools = d["tools"] as? Int ?? 0
+            sessionLine = "claude code session \(id)… · \(model) · \(tools) tools"
+            warmFacts.append(sessionLine!)
+        case "thinking":
+            // the mini forwarding the model's own planning (if it does): the realest warm-up there is
+            if let delta = d["delta"] as? String, !delta.isEmpty {
+                thinkingText = String((thinkingText + delta).suffix(200))
+                subtitle = "💭 " + thinkingText
+                quietSince = .now
+                lastThoughtAt = .now
+            }
+        case "thinking_tokens":
+            // proof of life: the model is planning, here is how much so far
+            if let n = d["tokens"] as? Int { thinkTokens = n }
         case "text":
             let delta = d["delta"] as? String ?? ""
             count(delta)
+            thinkingText = ""
+            thinkTokens = 0
             subtitle = String((subtitle + delta).suffix(220))
         case "say":
             let text = d["text"] as? String ?? ""
@@ -549,6 +649,8 @@ final class Studio {
             store.update(project)
         case "tool_start":
             let name = d["name"] as? String ?? ""
+            thinkingText = ""
+            thinkTokens = 0
             game.toolTrain(name)
             switch name {
             case "Write", "NotebookEdit":
@@ -564,24 +666,53 @@ final class Studio {
         case "tool_input":
             let id = d["id"] as? String ?? ""
             let name = d["name"] as? String ?? ""
-            let json = d["json"] as? String ?? ""
+            // v2 sends the new bytes; v1 the whole input so far. Either way we keep
+            // one growing string per tool and only ever decode its new tail.
+            if let delta = d["delta"] as? String {
+                inputJSON[id, default: ""].append(delta)
+            } else if var json = d["json"] as? String {
+                json.makeContiguousUTF8()      // JSONSerialization hands out NSStrings: O(n) per index otherwise
+                inputJSON[id] = json
+            }
+            let json = inputJSON[id] ?? ""
             let seen = inputSeen[id] ?? 0
-            if json.count > seen { count(chars: json.count - seen); inputSeen[id] = json.count }
+            let bytes = json.utf8.count
+            if bytes > seen { count(chars: (bytes - seen) * 3 / 4); inputSeen[id] = bytes }
+            func field(_ f: String) -> StreamedField {
+                var sf = inputFields[id]?[f] ?? StreamedField(f)
+                sf.feed(json)
+                inputFields[id, default: [:]][f] = sf
+                return sf
+            }
             switch name {
             case "Write":
-                if let c = PartialJSON.string("content", in: json) { liveCode = c }
-                if let f = PartialJSON.field2("file_path", in: json), f.1 { codePath = (f.0 as NSString).lastPathComponent }
+                let c = field("content")
+                if !c.text.isEmpty { liveCode = c.text }
+                let f = field("file_path")
+                if f.done { codePath = (f.text as NSString).lastPathComponent }
             case "Edit":
-                patchOld = PartialJSON.string("old_string", in: json) ?? ""
-                patchNew = PartialJSON.string("new_string", in: json) ?? ""
+                patchOld = field("old_string").text
+                patchNew = field("new_string").text
             case "Bash":
-                if let c = PartialJSON.string("command", in: json) { subtitle = "$ " + String(c.suffix(200)) }
+                let c = field("command")
+                if !c.text.isEmpty { subtitle = "$ " + String(c.text.suffix(200)) }
             default: break
             }
         case "tool_call":
+            if let id = d["id"] as? String {
+                if let w = inputFields[id]?["content"], w.done { lastDecodedWrite = w.text }
+                inputJSON[id] = nil; inputFields[id] = nil
+                if let cmd = (d["input"] as? [String: Any])?["command"] as? String { lastCommand[id] = cmd }
+            }
             let name = d["name"] as? String ?? ""
             log(.splat(tool: name), Self.describe(name, d["input"] as? [String: Any] ?? [:]))
         case "tool_result":
+            if let id = d["id"] as? String, let cmd = lastCommand.removeValue(forKey: id) {
+                let out = d["summary"] as? String ?? ""
+                let lines = out.split(separator: "\n").count
+                let short = cmd.replacingOccurrences(of: " --token \"$VERCEL_TOKEN\" --scope \"$VERCEL_SCOPE\"", with: "")
+                warmFacts.append("$ \(short.prefix(48))\(short.count > 48 ? "…" : "") → \(lines) line\(lines == 1 ? "" : "s") back")
+            }
             if !(d["ok"] as? Bool ?? true) {
                 lastBugs += 1
                 game.bugs(1)
@@ -591,6 +722,12 @@ final class Studio {
             phase = .thinking
         case "file":
             if let c = d["content"] as? String {
+                // replay/benchmark runs double as the decoder's check: the streamed
+                // Write must equal the file the server then sent
+                if ProcessInfo.processInfo.environment["TS_REPLAY"] != nil || ProcessInfo.processInfo.environment["TS_PERF"] != nil, let w = lastDecodedWrite {
+                    agentLog(w == c ? "decoder ok (\(c.utf8.count) bytes)" : "decoder MISMATCH: \(w.utf8.count) vs \(c.utf8.count) bytes")
+                    lastDecodedWrite = nil
+                }
                 remoteCode = c
                 liveCode = c
                 codePath = ((d["path"] as? String ?? "") as NSString).lastPathComponent
@@ -649,6 +786,14 @@ final class Studio {
         var name = ""
         var json = ""
         var spokenCaption = false
+        var fields: [String: StreamedField] = [:]
+        /// A field of this block's input, decoded up to the bytes seen so far.
+        func field(_ f: String) -> StreamedField {
+            var sf = fields[f] ?? StreamedField(f)
+            sf.feed(json)
+            fields[f] = sf
+            return sf
+        }
     }
 
     private func callModel(_ messages: [[String: Any]]) async throws -> Turn {
@@ -726,7 +871,7 @@ final class Studio {
 
     /// Streamed characters → an estimate of tokens → coins on the track.
     private var tokenCarry = 0.0
-    private func count(_ s: String) { count(chars: s.count) }
+    private func count(_ s: String) { count(chars: s.utf8.count) }
     private func count(chars: Int) {
         guard chars > 0 else { return }
         let t = Double(chars) / 3.6
@@ -774,14 +919,17 @@ final class Studio {
         }
         switch b.name {
         case "write_file":
-            if let c = PartialJSON.string("content", in: b.json) { liveCode = c }
-            if let t = PartialJSON.field2("app_title", in: b.json), t.1, project.title != t.0 {
-                project.title = t.0
-                if let em = PartialJSON.field2("app_emoji", in: b.json), em.1 { project.emoji = em.0 }
+            let c = b.field("content")
+            if !c.text.isEmpty { liveCode = c.text }
+            let t = b.field("app_title")
+            if t.done, project.title != t.text {
+                project.title = t.text
+                let em = b.field("app_emoji")
+                if em.done { project.emoji = em.text }
             }
         case "edit_file":
-            patchOld = PartialJSON.string("old_string", in: b.json) ?? ""
-            patchNew = PartialJSON.string("new_string", in: b.json) ?? ""
+            patchOld = b.field("old_string").text
+            patchNew = b.field("new_string").text
         default:
             break
         }
@@ -903,6 +1051,74 @@ final class Studio {
         "reading the prompt again", "it's giving… almost", "pixel by pixel",
     ]
 
+    /// The warm-up: while the feed is quiet (the model is planning; thinking
+    /// doesn't stream, code does) the subtitle shows things that are true —
+    /// the session and model, what the last command found, a live clock on
+    /// the wait, the ask, the workspace and where it will deploy, tokens so
+    /// far, the mini's count — instead of "reticulating splines".
+    private func warmupLoop() async {
+        quietSince = .now
+        warmTick = 0
+        warmFacts = []
+        thinkingText = ""
+        thinkTokens = 0
+        let id8 = project.id.uuidString.lowercased().prefix(8)
+        evergreen = [
+            "the ask: “\(shortPrompt(lastPrompt))”",
+            "workspace surf-\(id8) on the mini · deploys to surf-\(id8).vercel.app",
+            project.builds == 0 ? "first build of this app" : "build #\(project.builds + 1) of this app · it edits, it doesn't start over",
+            "splat plans before he types · the plan shows up as 💭",
+        ]
+        // one cheap fact from the mini itself
+        Task {
+            if let n = await Self.miniProjectCount() {
+                miniApps = n
+                warmFacts.append("the mini has \(n) apps on disk · yours is the one running")
+            }
+        }
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(1))
+            // a 💭 line stays up while summaries keep coming; after 4 s without one the clock takes over again
+            guard building, Date().timeIntervalSince(quietSince) > 2.5,
+                  thinkingText.isEmpty || Date().timeIntervalSince(lastThoughtAt) > 4 else { continue }
+            warmTick += 1
+            let waited = Int(Date().timeIntervalSince(quietSince))
+            if warmTick % 4 == 2, let fact = nextWarmFact() {
+                subtitle = fact
+            } else {
+                let tokens = outputTokens
+                let plan = thinkTokens
+                if plan > 0 && warmTick % 2 == 1 {
+                    subtitle = "💭 thinking · \(waited)s · \(plan.formatted()) tokens of plan so far"
+                    continue
+                }
+                let clocks = [
+                    "thinking · \(waited)s — the plan comes first, then the code",
+                    "opus 5.5 · medium effort · \(waited)s in its head",
+                    tokens > 0 ? "\(tokens.formatted()) tokens out so far · \(waited)s of quiet" : "0 tokens out so far · \(waited)s of quiet · all of it is upstairs",
+                    "quiet for \(waited)s · a bigger file means a longer think",
+                ]
+                subtitle = clocks[(warmTick / 4) % clocks.count]
+            }
+        }
+    }
+
+    private func nextWarmFact() -> String? {
+        if !warmFacts.isEmpty { return warmFacts.removeFirst() }
+        guard !evergreen.isEmpty else { return nil }
+        let f = evergreen.removeFirst()
+        evergreen.append(f)   // cycle the evergreens
+        return f
+    }
+
+    private static func miniProjectCount() async -> Int? {
+        var req = URLRequest(url: AgentAPI.base().appendingPathComponent("health"))
+        req.timeoutInterval = 8
+        guard let (data, _) = try? await URLSession.shared.data(for: req),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return obj["projects"] as? Int
+    }
+
     /// Something on screen while the model thinks silently.
     private func fillerLoop() async {
         while !Task.isCancelled {
@@ -962,6 +1178,16 @@ final class Narrator: NSObject, AVSpeechSynthesizerDelegate {
             .max { $0.quality.rawValue < $1.quality.rawValue }
         return best ?? AVSpeechSynthesisVoice(language: "en-US")
     }()
+
+    /// Loads the voice before the first real line: the first `speak` of a
+    /// session loads the voice's assets synchronously on the main thread
+    /// (a ~0.7 s stall, seen as a frozen game 8 s into every build, 2026-09-26).
+    func warm() {
+        let u = AVSpeechUtterance(string: ".")
+        u.voice = Self.voice
+        u.volume = 0
+        synth.speak(u)
+    }
 
     func say(_ text: String) {
         guard !held, !SurfAudio.shared.muted, UserDefaults.standard.object(forKey: "narrator") as? Bool ?? true else { return }

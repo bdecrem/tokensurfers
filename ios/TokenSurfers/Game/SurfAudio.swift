@@ -22,6 +22,9 @@ final class SurfAudio {
         var lpState: Double = 0
         var attack: Double = 0.004
         var curve: Double = 2      // decay shape
+        var ctr = 0                // control-rate counter: pitch and envelope recomputed every 8 samples
+        var fCache: Double = 0
+        var envCache: Double = 0
     }
     enum Wave { case sine, square, saw, tri }
 
@@ -198,9 +201,13 @@ final class SurfAudio {
     private func tick(_ v: inout Voice, dt: Double) -> Double {
         v.t += dt
         guard v.t >= 0, v.t < v.dur else { return 0 }
-        let k = v.t / v.dur
-        let f = v.freq * pow(v.freqEnd / v.freq, k)
-        v.phase += f * dt
+        if v.ctr == 0 {
+            let k = v.t / v.dur
+            v.fCache = v.freqEnd == v.freq ? v.freq : v.freq * pow(v.freqEnd / v.freq, k)
+            v.envCache = min(1, v.t / v.attack) * pow(1 - k, v.curve)
+        }
+        v.ctr = (v.ctr + 1) & 7
+        v.phase += v.fCache * dt
         if v.phase > 1 { v.phase -= 1 }
         let tone: Double
         switch v.wave {
@@ -214,8 +221,7 @@ final class SurfAudio {
             v.lpState += (s - v.lpState) * v.lp
             s = v.lpState
         }
-        let env = min(1, v.t / v.attack) * pow(1 - k, v.curve)
-        return s * env * v.gain
+        return s * v.envCache * v.gain
     }
 
     private func render(_ out: UnsafeMutablePointer<Float>, _ n: Int) {
@@ -225,6 +231,10 @@ final class SurfAudio {
         let wantMusic = (musicOn && !muted ? musicTarget : 0) * (listening ? 0.12 : 1)
         let bpm = 128 + pace * 22
         stepSamples = sampleRate * 60 / (bpm * 4)
+        if voices.isEmpty && musicLevel <= 0.002 && wantMusic <= 0 {
+            out.update(repeating: 0, count: n)
+            return
+        }
 
         for i in 0..<n {
             var mix = 0.0

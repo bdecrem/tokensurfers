@@ -3,7 +3,8 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getSurfUser } from '@/lib/surf/auth'
 import { getApp, ogImageURL } from '@/lib/surf/apps'
-import { Player, Report, Upvote } from '../../client'
+import { listComments, type Comment } from '@/lib/surf/comments'
+import { Comments, Player, Report, Upvote } from '../../client'
 import { Footer, TESTFLIGHT, TopBar } from '../../parts'
 
 export const dynamic = 'force-dynamic'
@@ -28,6 +29,13 @@ export default async function AppPage({ params }: Params) {
   const app = await getApp(slug, user?.id ?? null).catch(() => null)
   if (!app) notFound()
   const deep = `tokensurfers://remix/${app.slug}`
+  let comments: Comment[] = []
+  let commentsError: string | null = null
+  try {
+    comments = await listComments(app.id, app.ownerId, user?.id ?? null)
+  } catch (e) {
+    commentsError = `comments are taking a break: ${(e as Error).message}`
+  }
   return (
     <main className="wrap">
       <TopBar />
@@ -57,6 +65,7 @@ export default async function AppPage({ params }: Params) {
               {TESTFLIGHT ? <a href={TESTFLIGHT} style={{ textDecoration: 'underline' }}>don't have it? TestFlight →</a> : 'the TestFlight beta is coming.'}
             </p>
           )}
+          <Comments slug={app.slug} initial={comments} count={app.comments} error={commentsError} />
           <Report slug={app.slug} />
         </div>
       </div>

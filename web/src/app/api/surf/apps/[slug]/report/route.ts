@@ -28,6 +28,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
   try {
     const app = await getApp(slug, null)
     if (!app) return err('not found', 404)
+    // a creation takes so many reports a day; more is noise (each one texts and emails Bart)
+    const dayStart = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z').toISOString()
+    const { count } = await surfDb().from('surf_reports').select('id', { count: 'exact', head: true }).eq('app_id', app.id).gte('created_at', dayStart)
+    if ((count ?? 0) >= 10) return NextResponse.json({ ok: true, noted: true })
     const { error } = await surfDb().from('surf_reports').insert({ app_id: app.id, reporter_id: user?.id ?? null, reason })
     if (error) throw new Error(error.message)
     const line = `Token Surfers report: ${app.emoji} ${app.title} by @${app.owner}${reason ? ` — "${reason}"` : ''}${user ? ` (from @${user.handle})` : ''} ${SITE}/a/${app.slug}`

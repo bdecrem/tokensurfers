@@ -47,11 +47,10 @@ Apply `schema/*.sql` to a Supabase project first. The Anthropic key and the Supa
 
 ```bash
 cd ios
-cp TokenSurfers/App/Secrets.swift.example TokenSurfers/App/Secrets.swift
-# set backendURL to your web deployment and appKey to its SURF_APP_KEY
-xcodegen generate
 xcodebuild -project TokenSurfers.xcodeproj -scheme TokenSurfers \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
 ```
+
+The project builds as cloned. The first build writes `TokenSurfers/App/Secrets.swift` (gitignored) from `Secrets.swift.example`; set `backendURL` there to your web deployment and `appKey` to its `SURF_APP_KEY`. Run `xcodegen generate` after changing `project.yml`.
 
 `SURF_APP_KEY` gates the app's calls to your server. It ships inside the app binary, so treat it as a way to recognize the app, not as a password. Anyone who extracts it can use the agent route, so budget and rate-limit that route on your side.

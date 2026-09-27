@@ -1,9 +1,10 @@
 'use client'
 
-// The web gallery's interactive bits: the sandboxed player, upvoting, and a
-// tiny sign-in (same handle + password as the app; the API sets the cookie).
+// The web gallery's interactive bits: the sandboxed player, upvoting, comments,
+// and a tiny sign-in (same handle + password as the app; the API sets the cookie).
 
 import { useEffect, useState } from 'react'
+import type { Comment } from '@/lib/surf/comments'
 
 const STORAGE_SHIM = `<script>(function(){function mem(){var m={};return{getItem:function(k){return Object.prototype.hasOwnProperty.call(m,k)?m[k]:null},setItem:function(k,v){m[k]=String(v)},removeItem:function(k){delete m[k]},clear:function(){m={}},key:function(i){return Object.keys(m)[i]||null},get length(){return Object.keys(m).length}}}
 function fix(n){try{window[n].getItem('x')}catch(e){try{Object.defineProperty(window,n,{value:mem(),configurable:true})}catch(_){}}}
@@ -159,6 +160,96 @@ export function Upvote({ slug, upvotes, voted }: { slug: string; upvotes: number
       <button className={`key ${on ? '' : 'white'}`} onClick={vote} aria-pressed={on}>▲ {n}</button>
       {ask ? <SignIn onDone={() => { setAsk(false); vote() }} onCancel={() => setAsk(false)} /> : null}
     </>
+  )
+}
+
+/** "2m", "3h", "5d" — enough for a comment line. */
+export function ago(iso: string, now = Date.now()): string {
+  const s = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000))
+  if (s < 60) return 'now'
+  const m = Math.round(s / 60)
+  if (m < 60) return `${m}m`
+  const h = Math.round(m / 60)
+  if (h < 24) return `${h}h`
+  const d = Math.round(h / 24)
+  return d < 30 ? `${d}d` : `${Math.round(d / 30)}mo`
+}
+
+/** Comments under a creation: the list (newest first), a composer that asks
+ *  you to sign in on send, and × on the ones you may delete (yours, or any on
+ *  your own creation). */
+export function Comments({ slug, initial, count, error }: { slug: string; initial: Comment[]; count: number; error?: string | null }) {
+  const [list, setList] = useState(initial)
+  const [n, setN] = useState(count)
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [ask, setAsk] = useState(false)
+  const [err, setErr] = useState<string | null>(error ?? null)
+  const [now, setNow] = useState(0)
+  useEffect(() => { setNow(Date.now()) }, [])   // relative times only after hydration (the server has no "now" to agree on)
+
+  async function post() {
+    const body = text.trim()
+    if (!body || busy) return
+    setBusy(true)
+    setErr(null)
+    try {
+      const r = await fetch(`/api/surf/apps/${slug}/comments`, {
+        method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ body }),
+      })
+      if (r.status === 401) { setAsk(true); return }
+      const j = (await r.json()) as { comment?: Comment; comments?: number; error?: string }
+      if (!r.ok || !j.comment) throw new Error(j.error || 'could not post that')
+      setList((l) => [j.comment!, ...l])
+      setN(j.comments ?? n + 1)
+      setText('')
+      setNow(Date.now())
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function del(id: string) {
+    setErr(null)
+    const r = await fetch(`/api/surf/apps/${slug}/comments/${id}`, { method: 'DELETE', credentials: 'include' })
+    const j = (await r.json().catch(() => ({}))) as { comments?: number; error?: string }
+    if (!r.ok) { setErr(j.error || 'could not delete that'); return }
+    setList((l) => l.filter((c) => c.id !== id))
+    setN(j.comments ?? Math.max(0, n - 1))
+  }
+
+  return (
+    <section className="card cmts" aria-label="comments">
+      <div className="cmts-head"><small>COMMENTS</small><b data-count>{n}</b></div>
+      <form className="cmts-form" onSubmit={(e) => { e.preventDefault(); post() }}>
+        <textarea
+          value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={500}
+          placeholder="say something nice (or funny)"
+          onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); post() } }}
+        />
+        <button className="key" type="submit" aria-disabled={busy || !text.trim()}>{busy ? '…' : 'post'}</button>
+      </form>
+      {err ? <div className="err">{err}</div> : null}
+      {list.length === 0 ? (
+        <p className="cmts-empty">no comments yet. say hi.</p>
+      ) : (
+        <ul className="cmts-list">
+          {list.map((c) => (
+            <li className="cmt" key={c.id}>
+              <div className="who">
+                <span>@{c.handle}</span>
+                <time dateTime={c.createdAt} suppressHydrationWarning>{now ? ago(c.createdAt, now) : ''}</time>
+                {c.canDelete ? <button className="x" type="button" onClick={() => del(c.id)} aria-label="delete comment">×</button> : null}
+              </div>
+              <p>{c.body}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {ask ? <SignIn onDone={() => { setAsk(false); post() }} onCancel={() => setAsk(false)} /> : null}
+    </section>
   )
 }
 

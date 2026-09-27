@@ -11,28 +11,33 @@
 		154CC1BB3CF1989B2201B1AC /* AppRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D215114C01717BE69A091A8 /* AppRunner.swift */; };
 		21A06EF7CD83B31BE4AF4DD5 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5850B90F7438A0C8643A6792 /* Theme.swift */; };
 		237FDF18278B29B8E299D4DD /* CaptionBand.swift in Sources */ = {isa = PBXBuildFile; fileRef = F86B61EEC8EF7742EF1EFB91 /* CaptionBand.swift */; };
+		27789EED94F8A0ED59C921D4 /* SurfInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F2E23ACEE1A77F035E7F72 /* SurfInbox.swift */; };
 		345A7E99A895417B4ED8D8E4 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 434FE7FD5886BC3CBA6C1007 /* Assets.xcassets */; };
 		3CBD418F2D284FB8232C44AF /* ProjectStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D75795D20D8E4C54625BBD1C /* ProjectStore.swift */; };
+		3E34496E820A98AC40DA8785 /* ScenePalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10180023FFBB6ED01AABBE1A /* ScenePalette.swift */; };
 		40FE5FDF05EFEFD6DD4BB10B /* SurfAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A6FAF26B8D3A44B59426C7 /* SurfAPI.swift */; };
 		4A486C215DEDFF7C7E1ADF3E /* RemoteEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA460FC7B0A043146FFD0784 /* RemoteEngine.swift */; };
 		50280016A75A4A1C28681C3F /* TokenSurfersApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140A555B1BF75510782BFEAC /* TokenSurfersApp.swift */; };
+		54D7EB0B85B7A9D3E2445910 /* InboxCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68C9097070EDE6AE24A49D85 /* InboxCard.swift */; };
+		5A8D79EBAD193B194AA94533 /* HomeSplat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1514EFEBA340E63D1D2FBD59 /* HomeSplat.swift */; };
 		5CE1740CC0D49C8669535958 /* SurferArt.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20AC0B691B5EFFA7A806C18 /* SurferArt.swift */; };
 		67B389CF94F703FECEC5F0A5 /* LiveFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFD2104364CBB1C2BA94BD72 /* LiveFeed.swift */; };
 		6A58AD0AB616E179A14AD79C /* BlobArt.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7527D8A15A97053FD86758F /* BlobArt.swift */; };
 		7A5D93A65154DEBF5A9D5651 /* SurfGameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8C0C57F401EF078A6B831D2 /* SurfGameView.swift */; };
 		84A68F44B8741EE69424AA8D /* GalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D433691AFF940E0ADCBF5569 /* GalleryView.swift */; };
 		9883E656538BE9E9F2AB98D4 /* SurfAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6570E755A3C2C0B71A922680 /* SurfAudio.swift */; };
+		9D8A0F26263507FCCCA4486F /* PerfMeter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5178F875F424DAC10F39CB73 /* PerfMeter.swift */; };
 		9DFC203CDFFC61F0AEFE6D6E /* VoiceInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB0709843D752547B9D0619D /* VoiceInput.swift */; };
 		B1242E55BDB8FC63BD2F815D /* Mascots.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF9F75B597B47D8F471BCD95 /* Mascots.swift */; };
 		B1A1A8B58802E1AA938C6D22 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09CF2ED5858A738C214CE367 /* Secrets.swift */; };
 		B2F136FD4D5C0E772DA6C156 /* Montserrat-Black.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A1959D3F66992E31FC1270A6 /* Montserrat-Black.ttf */; };
-		B606890F43FE8671ED8C2BBE /* Secrets.swift.example in Resources */ = {isa = PBXBuildFile; fileRef = 3F1ADBD84EC242FF2E17DBFA /* Secrets.swift.example */; };
 		B746CB91F818BA16F78063C9 /* StageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F30D2D848D8A6976591A7680 /* StageViews.swift */; };
 		B944C92AD9C453C9A44AB0A3 /* Anton-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 757A510603274E66D6F74FCF /* Anton-Regular.ttf */; };
 		D1A78F9AD8B6ED2698416CA2 /* Studio.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30074E3ADEA5B6BD6B2EDC1 /* Studio.swift */; };
 		E077DCA4B7117D31E5CB6732 /* SurfAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C269BFDE560E4C7E6F0D63B /* SurfAccount.swift */; };
 		E50D89B5A3F2E21990B7436D /* SurfRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61687D57C5AA1DB02355FEDB /* SurfRenderer.swift */; };
 		E797D8BAECA7774FAF8C033F /* SurfEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E086AD51AB083526161C1A /* SurfEngine.swift */; };
+		EC5863478CAA880E4F1883C6 /* StreamedField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 006029C3BC310871F26DE8E9 /* StreamedField.swift */; };
 		EF1900240C01A65BFF0F000A /* Leaderboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB5885B3E61D2A54BC8A0D3F /* Leaderboard.swift */; };
 		F1CC3774AEBE4145B8D943B0 /* Montserrat-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 57435456BCD7F64360803E98 /* Montserrat-ExtraBold.ttf */; };
 		FEC528561C0E29F0E6419676 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200232E278F9AC3DF43FA397 /* HomeView.swift */; };
@@ -40,19 +45,24 @@
 
 /* Begin PBXFileReference section */
 		0042B7B1D3CD30FE59B77EB4 /* StudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioView.swift; sourceTree = "<group>"; };
+		006029C3BC310871F26DE8E9 /* StreamedField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamedField.swift; sourceTree = "<group>"; };
 		00A6FAF26B8D3A44B59426C7 /* SurfAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurfAPI.swift; sourceTree = "<group>"; };
 		00F022A3922F46B8820472A6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		09CF2ED5858A738C214CE367 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
+		10180023FFBB6ED01AABBE1A /* ScenePalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScenePalette.swift; sourceTree = "<group>"; };
 		140A555B1BF75510782BFEAC /* TokenSurfersApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenSurfersApp.swift; sourceTree = "<group>"; };
+		1514EFEBA340E63D1D2FBD59 /* HomeSplat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeSplat.swift; sourceTree = "<group>"; };
 		1C269BFDE560E4C7E6F0D63B /* SurfAccount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurfAccount.swift; sourceTree = "<group>"; };
 		200232E278F9AC3DF43FA397 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		3F1ADBD84EC242FF2E17DBFA /* Secrets.swift.example */ = {isa = PBXFileReference; path = Secrets.swift.example; sourceTree = "<group>"; };
 		434FE7FD5886BC3CBA6C1007 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		50E086AD51AB083526161C1A /* SurfEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurfEngine.swift; sourceTree = "<group>"; };
+		5178F875F424DAC10F39CB73 /* PerfMeter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerfMeter.swift; sourceTree = "<group>"; };
 		57435456BCD7F64360803E98 /* Montserrat-ExtraBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Montserrat-ExtraBold.ttf"; sourceTree = "<group>"; };
 		5850B90F7438A0C8643A6792 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		61687D57C5AA1DB02355FEDB /* SurfRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurfRenderer.swift; sourceTree = "<group>"; };
 		6570E755A3C2C0B71A922680 /* SurfAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurfAudio.swift; sourceTree = "<group>"; };
+		68C9097070EDE6AE24A49D85 /* InboxCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxCard.swift; sourceTree = "<group>"; };
 		6D215114C01717BE69A091A8 /* AppRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRunner.swift; sourceTree = "<group>"; };
 		757A510603274E66D6F74FCF /* Anton-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Anton-Regular.ttf"; sourceTree = "<group>"; };
 		963B511C7542AE5F703AE85D /* TokenSurfers.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TokenSurfers.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -66,6 +76,7 @@
 		D75795D20D8E4C54625BBD1C /* ProjectStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectStore.swift; sourceTree = "<group>"; };
 		E30074E3ADEA5B6BD6B2EDC1 /* Studio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Studio.swift; sourceTree = "<group>"; };
 		E8C0C57F401EF078A6B831D2 /* SurfGameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurfGameView.swift; sourceTree = "<group>"; };
+		E9F2E23ACEE1A77F035E7F72 /* SurfInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurfInbox.swift; sourceTree = "<group>"; };
 		EB0709843D752547B9D0619D /* VoiceInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInput.swift; sourceTree = "<group>"; };
 		F30D2D848D8A6976591A7680 /* StageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StageViews.swift; sourceTree = "<group>"; };
 		F86B61EEC8EF7742EF1EFB91 /* CaptionBand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptionBand.swift; sourceTree = "<group>"; };
@@ -119,9 +130,11 @@
 				6D215114C01717BE69A091A8 /* AppRunner.swift */,
 				D75795D20D8E4C54625BBD1C /* ProjectStore.swift */,
 				CA460FC7B0A043146FFD0784 /* RemoteEngine.swift */,
+				006029C3BC310871F26DE8E9 /* StreamedField.swift */,
 				E30074E3ADEA5B6BD6B2EDC1 /* Studio.swift */,
 				1C269BFDE560E4C7E6F0D63B /* SurfAccount.swift */,
 				00A6FAF26B8D3A44B59426C7 /* SurfAPI.swift */,
+				E9F2E23ACEE1A77F035E7F72 /* SurfInbox.swift */,
 				EB0709843D752547B9D0619D /* VoiceInput.swift */,
 			);
 			path = Agent;
@@ -132,6 +145,8 @@
 			children = (
 				C7527D8A15A97053FD86758F /* BlobArt.swift */,
 				CB5885B3E61D2A54BC8A0D3F /* Leaderboard.swift */,
+				5178F875F424DAC10F39CB73 /* PerfMeter.swift */,
+				10180023FFBB6ED01AABBE1A /* ScenePalette.swift */,
 				6570E755A3C2C0B71A922680 /* SurfAudio.swift */,
 				50E086AD51AB083526161C1A /* SurfEngine.swift */,
 				B20AC0B691B5EFFA7A806C18 /* SurferArt.swift */,
@@ -156,7 +171,9 @@
 			children = (
 				F86B61EEC8EF7742EF1EFB91 /* CaptionBand.swift */,
 				D433691AFF940E0ADCBF5569 /* GalleryView.swift */,
+				1514EFEBA340E63D1D2FBD59 /* HomeSplat.swift */,
 				200232E278F9AC3DF43FA397 /* HomeView.swift */,
+				68C9097070EDE6AE24A49D85 /* InboxCard.swift */,
 				CFD2104364CBB1C2BA94BD72 /* LiveFeed.swift */,
 				FF9F75B597B47D8F471BCD95 /* Mascots.swift */,
 				F30D2D848D8A6976591A7680 /* StageViews.swift */,
@@ -173,6 +190,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 99AF1077CF9E6C270F2EE8C9 /* Build configuration list for PBXNativeTarget "TokenSurfers" */;
 			buildPhases = (
+				9212744FC109DF362B42B651 /* Secrets.swift */,
 				856BD05A7EFCE45C9078FA04 /* Sources */,
 				8923BC9D9E150582A68BBFB9 /* Resources */,
 			);
@@ -229,11 +247,34 @@
 				345A7E99A895417B4ED8D8E4 /* Assets.xcassets in Resources */,
 				B2F136FD4D5C0E772DA6C156 /* Montserrat-Black.ttf in Resources */,
 				F1CC3774AEBE4145B8D943B0 /* Montserrat-ExtraBold.ttf in Resources */,
-				B606890F43FE8671ED8C2BBE /* Secrets.swift.example in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		9212744FC109DF362B42B651 /* Secrets.swift */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/TokenSurfers/App/Secrets.swift.example",
+			);
+			name = Secrets.swift;
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/TokenSurfers/App/Secrets.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Fresh clone: write Secrets.swift from the example. An existing one is never touched.\nif [ ! -f \"$SRCROOT/TokenSurfers/App/Secrets.swift\" ]; then\n  cp \"$SRCROOT/TokenSurfers/App/Secrets.swift.example\" \"$SRCROOT/TokenSurfers/App/Secrets.swift\"\n  echo \"note: wrote TokenSurfers/App/Secrets.swift from Secrets.swift.example; set backendURL and appKey there\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		856BD05A7EFCE45C9078FA04 /* Sources */ = {
@@ -244,14 +285,19 @@
 				6A58AD0AB616E179A14AD79C /* BlobArt.swift in Sources */,
 				237FDF18278B29B8E299D4DD /* CaptionBand.swift in Sources */,
 				84A68F44B8741EE69424AA8D /* GalleryView.swift in Sources */,
+				5A8D79EBAD193B194AA94533 /* HomeSplat.swift in Sources */,
 				FEC528561C0E29F0E6419676 /* HomeView.swift in Sources */,
+				54D7EB0B85B7A9D3E2445910 /* InboxCard.swift in Sources */,
 				EF1900240C01A65BFF0F000A /* Leaderboard.swift in Sources */,
 				67B389CF94F703FECEC5F0A5 /* LiveFeed.swift in Sources */,
 				B1242E55BDB8FC63BD2F815D /* Mascots.swift in Sources */,
+				9D8A0F26263507FCCCA4486F /* PerfMeter.swift in Sources */,
 				3CBD418F2D284FB8232C44AF /* ProjectStore.swift in Sources */,
 				4A486C215DEDFF7C7E1ADF3E /* RemoteEngine.swift in Sources */,
+				3E34496E820A98AC40DA8785 /* ScenePalette.swift in Sources */,
 				B1A1A8B58802E1AA938C6D22 /* Secrets.swift in Sources */,
 				B746CB91F818BA16F78063C9 /* StageViews.swift in Sources */,
+				EC5863478CAA880E4F1883C6 /* StreamedField.swift in Sources */,
 				D1A78F9AD8B6ED2698416CA2 /* Studio.swift in Sources */,
 				0C8EBC38E25613522A603B20 /* StudioView.swift in Sources */,
 				40FE5FDF05EFEFD6DD4BB10B /* SurfAPI.swift in Sources */,
@@ -259,6 +305,7 @@
 				9883E656538BE9E9F2AB98D4 /* SurfAudio.swift in Sources */,
 				E797D8BAECA7774FAF8C033F /* SurfEngine.swift in Sources */,
 				7A5D93A65154DEBF5A9D5651 /* SurfGameView.swift in Sources */,
+				27789EED94F8A0ED59C921D4 /* SurfInbox.swift in Sources */,
 				E50D89B5A3F2E21990B7436D /* SurfRenderer.swift in Sources */,
 				5CE1740CC0D49C8669535958 /* SurferArt.swift in Sources */,
 				21A06EF7CD83B31BE4AF4DD5 /* Theme.swift in Sources */,
@@ -304,7 +351,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 17;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 274T5WCVD2;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -385,7 +432,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 17;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 274T5WCVD2;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

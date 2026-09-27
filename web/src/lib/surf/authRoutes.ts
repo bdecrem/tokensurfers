@@ -2,8 +2,10 @@
 // the session cookie set for browsers. The app keeps the token; the web
 // keeps the cookie.
 
-import { NextRequest, NextResponse } from 'next/server'
+import { after, NextRequest, NextResponse } from 'next/server'
 import { login, normalizeHandle, setSessionCookie, signToken, signup, validateCredentials, type SurfUser } from './auth'
+import { surfDb } from './db'
+import { notifySignup } from './notify'
 
 export async function handleAuth(req: NextRequest, mode: 'signup' | 'login'): Promise<NextResponse> {
   let body: { handle?: unknown; password?: unknown }
@@ -24,6 +26,15 @@ export async function handleAuth(req: NextRequest, mode: 'signup' | 'login'): Pr
     return NextResponse.json({ error: 'accounts are unavailable right now' }, { status: 502 })
   }
   if ('error' in result) return NextResponse.json({ error: result.error }, { status: mode === 'signup' ? 409 : 401 })
+  if (mode === 'signup') {
+    // an email to Bart for every new account, after the response has gone out; the app sends x-surf-key, the web doesn't
+    const via = req.headers.get('x-surf-key') ? 'the app' : 'the web'
+    const handle = result.handle
+    after(async () => {
+      const { count } = await surfDb().from('surf_users').select('id', { count: 'exact', head: true }).then((r) => r, () => ({ count: null }))
+      await notifySignup({ handle, via, total: count ?? null })
+    })
+  }
   const token = signToken(result.id)
   const res = NextResponse.json({ token, user: result })
   setSessionCookie(res, token)

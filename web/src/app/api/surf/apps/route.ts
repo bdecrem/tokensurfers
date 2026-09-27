@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getSurfUser } from '@/lib/surf/auth'
-import { cleanEmoji, cleanPrompt, cleanTitle, HTML_MAX, listApps, publish } from '@/lib/surf/apps'
+import { cleanEmoji, cleanPrompt, cleanTitle, HTML_MAX, listApps, publish, PublishCap } from '@/lib/surf/apps'
 
 export const runtime = 'nodejs'
 
@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
     })
     return NextResponse.json({ app })
   } catch (e) {
+    if (e instanceof PublishCap) return err(e.message, 429)
     console.error('[surf/apps] publish', (e as Error).message)
     return err('could not publish', 502)
   }

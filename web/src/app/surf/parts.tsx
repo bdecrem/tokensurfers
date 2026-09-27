@@ -2,7 +2,7 @@ import Link from 'next/link'
 import type { AppCard } from '@/lib/surf/apps'
 import { AccountPill } from './client'
 
-export const GITHUB = 'https://github.com/bdecrem/hilma/tree/main/apps/tokensurfers'
+export const GITHUB = process.env.SURF_GITHUB_URL || 'https://github.com/bdecrem/tokensurfers'
 export const TESTFLIGHT = process.env.SURF_TESTFLIGHT_URL || ''
 
 /** Splat, the tube man (public/surf/splat.svg, from misc/splat.svg). */
@@ -40,7 +40,7 @@ export function AppTile({ app }: { app: AppCard }) {
     <Link className="card app" href={`/surf/a/${app.slug}`}>
       <div className="tile" style={{ background: `hsl(${hue(app.slug)} 55% 88%)` }}>
         <span>{app.emoji}</span>
-        <span className={`votes ${app.voted ? 'on' : ''}`}>▲ {app.upvotes}</span>
+        <span className={`votes ${app.voted ? 'on' : ''}`}>▲ {app.upvotes}{app.comments > 0 ? ` · 💬 ${app.comments}` : ''}</span>
       </div>
       <div className="t">{app.title}</div>
       <div className="by">@{app.owner}{app.remixOf ? ' · remix' : ''}</div>

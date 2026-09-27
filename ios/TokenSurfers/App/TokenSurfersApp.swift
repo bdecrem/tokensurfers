@@ -49,7 +49,7 @@ struct RootView: View {
 
     var body: some View {
         ZStack {
-            HomeView { id, prompt in
+            HomeView(covered: openID != nil) { id, prompt in
                 openPrompt = prompt
                 withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) { openID = id }
             }
@@ -64,7 +64,7 @@ struct RootView: View {
             }
         }
         .onOpenURL { url in handle(url) }
-        .task { autorun() }
+        .task { PerfMeter.start(); autorun() }
         // Every colour in the app is fixed paper and ink; system Dark Mode would
         // only flip the parts that follow it (text fields, menus, the keyboard).
         .preferredColorScheme(.light)

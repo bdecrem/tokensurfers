@@ -50,7 +50,9 @@
   cursor: pointer; transition: transform 0.12s; white-space: nowrap;
 }
 .sf .key:active { transform: translateY(2px) scale(0.98); box-shadow: 0 2px 0 var(--ink); }
-.sf .key.ink { background: var(--ink); }
+/* ink on ink has no edge: the dark key wears the same white sticker outline as the phone frame */
+.sf .key.ink { background: var(--ink); border-color: #fff; box-shadow: 0 4px 0 #fff; }
+.sf .key.ink:active { box-shadow: 0 2px 0 #fff; }
 .sf .key.white { background: #fff; color: var(--ink); }
 .sf .key.yellow { background: var(--yellow); color: var(--ink); }
 .sf .key[aria-disabled="true"] { opacity: 0.6; pointer-events: none; }
@@ -113,6 +115,25 @@
 .sf .meta .prompt small { display: block; font-size: 11px; font-weight: 900; letter-spacing: 0.08em; color: var(--ink2); margin-bottom: 4px; }
 .sf .meta .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .sf .meta .note { margin-top: 10px; font-size: 13px; font-weight: 700; color: #fff; text-shadow: 0 1.5px 0 var(--ink); }
+
+/* comments */
+.sf .cmts { margin-top: 18px; padding: 14px 16px; display: grid; gap: 10px; }
+.sf .cmts-head { display: flex; align-items: baseline; gap: 8px; }
+.sf .cmts-head small { font-size: 11px; font-weight: 900; letter-spacing: 0.08em; color: var(--ink2); }
+.sf .cmts-head b { font-size: 13px; font-weight: 900; }
+.sf .cmts-form { display: flex; gap: 8px; align-items: flex-end; }
+.sf .cmts-form textarea { flex: 1; min-width: 0; min-height: 48px; resize: vertical; font: inherit; font-size: 15px; font-weight: 700; padding: 11px 12px; border-radius: 14px; border: 2.5px solid var(--ink); background: #fff; color: var(--ink); }
+.sf .cmts-form textarea::placeholder { color: var(--ink2); opacity: 0.7; }
+.sf .cmts-form .key { height: 48px; padding: 0 18px; font-size: 15px; }
+.sf .cmts .err { color: #fff; background: var(--red); border-radius: 999px; padding: 6px 12px; font-weight: 800; font-size: 13px; justify-self: start; }
+.sf .cmts-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.sf .cmt { border-top: 1.5px solid rgba(23, 19, 31, 0.1); padding: 10px 0 8px; }
+.sf .cmt .who { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 900; }
+.sf .cmt .who time { color: var(--ink2); font-weight: 700; }
+.sf .cmt .who .x { margin-left: auto; background: none; border: 0; color: var(--ink2); font: inherit; font-size: 18px; line-height: 1; font-weight: 900; cursor: pointer; padding: 0 4px; }
+.sf .cmt .who .x:hover { color: var(--red); }
+.sf .cmt p { margin: 3px 0 0; font-size: 15px; font-weight: 600; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sf .cmts-empty { margin: 0; color: var(--ink2); font-weight: 700; font-size: 14px; }
 
 /* modal */
 .sf .modal { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(23, 19, 31, 0.55); padding: 16px; }

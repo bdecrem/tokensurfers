@@ -9,6 +9,8 @@ struct SurfGameView: View {
     var mode = "build"                  // "build" (under a build) | "solo"
     var autoplay = false                // solo: skip the start screen
     var onClose: (() -> Void)? = nil
+    /// The player is playing (took the controls, or moved in a live run).
+    var onPlay: (() -> Void)? = nil
 
     private var solo: Bool { mode == "solo" }
 
@@ -25,27 +27,53 @@ struct SurfGameView: View {
     @State private var submitting = false
     @State private var board = Leaderboard.shared
     @State private var width: CGFloat = 390
+    @State private var height: CGFloat = 600
     @Environment(\.scenePhase) private var scenePhase
     @FocusState private var focused: Bool
+
+    /// Canvas points per screen point: the scene draws smaller and is scaled up.
+    static let canvasScale: CGFloat = 1.5
+    /// TS_FPS=30 caps the game's frame rate (benchmarks compare at a fixed rate); nil = the display's.
+    static let frameInterval: Double? = ProcessInfo.processInfo.environment["TS_FPS"].flatMap { Double($0) }.map { 1 / $0 }
 
     private var active: Bool { running && !paused && (solo ? armed : true) && scenePhase == .active }
 
     var body: some View {
-        TimelineView(.animation(paused: !active)) { tl in
-            let now = tl.date
-            ZStack {
-                Canvas { ctx, size in
-                    let dt = clock.tick(now)
-                    engine.step(dt)
-                    SurfRenderer(e: engine, size: size).draw(&ctx)
+        ZStack {
+            // The scene is rasterized at 2/3 of the screen scale (2× on a 3× phone)
+            // and scaled up on the GPU: the same flat shapes, less than half the
+            // CoreGraphics work per frame (2026-09-24 profile: rasterizing the
+            // canvas was most of the main thread).
+            TimelineView(.animation(minimumInterval: Self.frameInterval, paused: !active)) { tl in
+                let now = tl.date
+                GeometryReader { g in
+                    let k = Self.canvasScale
+                    Canvas(rendersAsynchronously: true) { ctx, size in
+                        let t0 = PerfMeter.frameStart()
+                        let dt = clock.tick(now)
+                        engine.step(dt)
+                        SurfRenderer(e: engine, size: size).draw(&ctx)
+                        PerfMeter.frames += 1
+                        PerfMeter.frameEnd(t0)
+                    }
+                    .frame(width: g.size.width / k, height: g.size.height / k)
+                    .scaleEffect(k, anchor: .topLeading)
                 }
-                hud(now)
+            }
+            // The HUD (nine stacked Texts per stroked label) is laid out at 10 Hz, not
+            // per frame: it was a third of the frame's main-thread time.
+            TimelineView(.animation(minimumInterval: 0.1, paused: !active)) { tl in
+                hud(tl.date)
             }
         }
         .contentShape(Rectangle())
         .gesture(swipe)
         .simultaneousGesture(SpatialTapGesture().onEnded { tap($0.location) })
-        .overlay(GeometryReader { g in Color.clear.onAppear { width = g.size.width }.onChange(of: g.size.width) { _, w in width = w } })
+        .overlay(GeometryReader { g in
+            Color.clear
+                .onAppear { width = g.size.width; height = g.size.height }
+                .onChange(of: g.size) { _, sz in width = sz.width; height = sz.height }
+        })
         .overlay { overlays }
         .focusable()
         .focusEffectDisabled()
@@ -54,7 +82,7 @@ struct SurfGameView: View {
             if solo, !armed { armed = true; focused = true; return .handled }
             if attract { takeOver(); return .handled }
             if engine.over {
-                if press.key == .space || press.key == .return || press.key == "r" { restart(); return .handled }
+                if canRunBack { restart(); return .handled }
                 return .ignored
             }
             switch press.key {
@@ -68,6 +96,7 @@ struct SurfGameView: View {
             return .handled
         }
         .onAppear {
+            GlyphCache.warm()
             engine.onSound = { SurfAudio.shared.play($0) }
             engine.onCrash = { oofAt = .now }
             engine.onSpeed = { SurfAudio.shared.pace = $0 }
@@ -77,9 +106,17 @@ struct SurfGameView: View {
                 attract = true
                 engine.autopilot = true
             }
+            // The engine outlives this view (the Studio owns it): a run that died
+            // before the pane was tucked away / re-laid out comes back with its card,
+            // not as a frozen corpse that ignores every tap.
+            if engine.over, !engine.autopilot { overCard = true }
             engine.paused = !active
             SurfAudio.shared.start()
             if solo { Task { await board.refresh() } }
+            // TS_PLAY=1: the player takes the controls 3 s in (the simulator has no finger)
+            if !solo, ProcessInfo.processInfo.environment["TS_PLAY"] != nil {
+                Task { try? await Task.sleep(for: .seconds(6)); if attract { takeOver() } }
+            }
         }
         .onDisappear { SurfAudio.shared.musicTarget = 0 }
         .task(id: attract) {
@@ -112,7 +149,9 @@ struct SurfGameView: View {
                 focused = true
                 if solo, !armed { armed = true; return }
                 if attract { takeOver(); return }
-                guard !engine.over, !paused else { return }
+                if engine.over { if canRunBack { restart() }; return }
+                guard !paused else { return }
+                onPlay?()
                 if abs(dx) > abs(dy) { dx < 0 ? engine.left() : engine.right() }
                 else { dy < 0 ? engine.jump() : engine.roll() }
             }
@@ -124,7 +163,9 @@ struct SurfGameView: View {
         focused = true
         if solo, !armed { armed = true; return }
         if attract { takeOver(); return }
-        guard !engine.over, !paused else { return }
+        if engine.over { if canRunBack { restart() }; return }
+        guard !paused else { return }
+        onPlay?()
         if p.x < width / 3 { engine.left() }
         else if p.x > width * 2 / 3 { engine.right() }
         else { engine.jump() }
@@ -138,6 +179,7 @@ struct SurfGameView: View {
         engine.restart()
         engine.toast("YOU'RE UP")
         SurfAudio.shared.play(.streak)
+        onPlay?()
     }
 
     // MARK: game over
@@ -152,6 +194,8 @@ struct SurfGameView: View {
             try? await Task.sleep(for: .seconds(0.7))
             SurfAudio.shared.play(.gameOver)
             try? await Task.sleep(for: .seconds(0.4))
+            // a tap may already have run it back (canRunBack opens at 0.8 s)
+            guard engine.over else { return }
             withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) { overCard = true }
         }
         if board.hasHandle { submit() }
@@ -167,6 +211,9 @@ struct SurfGameView: View {
         }
     }
 
+    /// Dead long enough that a stray swipe from the crash can't skip the card.
+    private var canRunBack: Bool { engine.over && !engine.autopilot && engine.time - engine.deathAt > 0.8 }
+
     private func restart() {
         overCard = false
         submitted = nil
@@ -178,6 +225,16 @@ struct SurfGameView: View {
 
     // MARK: overlays
 
+    /// Active powers with their seconds left (the HUD redraws at 10 Hz).
+    private var powerChips: [String] {
+        var c: [String] = []
+        if engine.rocket > 0 { c.append("🚀 \(Int(engine.rocket.rounded(.up)))s") }
+        if engine.magnet > 0 { c.append("🧲 \(Int(engine.magnet.rounded(.up)))s") }
+        if engine.double > 0 { c.append("💰×2 · \(Int(engine.double.rounded(.up)))s") }
+        if engine.shield { c.append("🛡️") }
+        return c
+    }
+
     @ViewBuilder private func hud(_ now: Date) -> some View {
         let s = compact ? 0.75 : 1.0
         VStack {
@@ -185,6 +242,19 @@ struct SurfGameView: View {
                 VStack(alignment: .leading, spacing: -4) {
                     StrokedText(text: "x\(engine.multiplier)", font: Theme.anton(34 * s), color: engine.multiplier > 1 ? Theme.yellow : .white, stroke: 2.5)
                     StrokedText(text: "TOKEN SURFERS", font: Theme.anton(13 * s), stroke: 1.5)
+                    let chips = powerChips
+                    if !chips.isEmpty {
+                        HStack(spacing: 4) {
+                            ForEach(chips, id: \.self) { chip in
+                                Text(chip)
+                                    .font(Theme.black(11 * s)).foregroundStyle(Theme.ink)
+                                    .monospacedDigit()
+                                    .padding(.horizontal, 6).padding(.vertical, 2)
+                                    .background(Capsule().fill(.white.opacity(0.92)))
+                            }
+                        }
+                        .padding(.top, 8)
+                    }
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 0) {
@@ -244,9 +314,9 @@ struct SurfGameView: View {
                 }
             }
             if solo, !armed { intro }
-            if attract { attractHint }
+            if attract, ProcessInfo.processInfo.environment["TS_QUIET"] == nil { attractHint }   // TS_QUIET=1: no hint (recordings)
             if paused, !engine.over { pauseCard }
-            if overCard { gameOverCard }
+            if overCard { if height < 250 { slimOverCard } else { gameOverCard } }
         }
     }
 
@@ -278,17 +348,18 @@ struct SurfGameView: View {
         .allowsHitTesting(false)
     }
 
+    /// Under the HUD, not at the bottom: the subtitle box (what the mini is doing) lives down there.
     private var attractHint: some View {
         VStack {
-            Spacer()
             TimelineView(.periodic(from: .now, by: 0.7)) { tl in
                 Text("swipe to take over")
-                    .font(Theme.black(compact ? 12 : 14)).foregroundStyle(.white)
-                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .font(Theme.black(compact ? 11 : 13)).foregroundStyle(.white)
+                    .padding(.horizontal, 11).padding(.vertical, 5)
                     .background(Capsule().fill(.black.opacity(0.45)))
                     .opacity(Int(tl.date.timeIntervalSinceReferenceDate / 0.7) % 2 == 0 ? 1 : 0.6)
             }
-            .padding(.bottom, compact ? 8 : 14)
+            .padding(.top, compact ? 46 : 60)
+            Spacer()
         }
         .allowsHitTesting(false)
     }
@@ -311,6 +382,8 @@ struct SurfGameView: View {
         let s = compact ? 0.78 : 1.0
         return ZStack {
             Color.black.opacity(0.35)
+                .contentShape(Rectangle())
+                .onTapGesture { restart() }
             VStack(spacing: 10 * s) {
                 HStack(spacing: 10) {
                     BlobHero(unit: 22 * s, mood: .dead, running: false)
@@ -343,6 +416,31 @@ struct SurfGameView: View {
             .padding(16 * s)
             .frame(width: min(width - 24, 340 * s + 40))
             .paperCard(radius: 22)
+        }
+    }
+
+    /// A short split pane (the seam dragged down, the keyboard up) can't hold the
+    /// full card: one row, and the whole pane is the RUN IT BACK button.
+    private var slimOverCard: some View {
+        ZStack {
+            Color.black.opacity(0.35)
+                .contentShape(Rectangle())
+                .onTapGesture { restart() }
+            HStack(spacing: 10) {
+                BlobHero(unit: 16, mood: .dead, running: false)
+                VStack(alignment: .leading, spacing: -4) {
+                    StrokedText(text: "GAME OVER", font: Theme.anton(18), stroke: 2)
+                    Text("\(engine.score.formatted()) · \(engine.coins) coins")
+                        .font(Theme.black(10)).foregroundStyle(Theme.yellow)
+                        .shadow(color: Theme.ink, radius: 0, y: 1)
+                }
+                Spacer(minLength: 4)
+                ChunkyButton(title: "RUN IT BACK", height: 36) { restart() }
+                    .frame(width: 128)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .frame(width: min(width - 20, 360))
+            .paperCard(radius: 16)
         }
     }
 
@@ -393,12 +491,28 @@ struct GameScreen: View {
 
     var body: some View {
         ZStack {
-            Color(hex: 0xEE7F52).ignoresSafeArea()
-            SurfGameView(engine: engine, running: true, mode: "solo", autoplay: ProcessInfo.processInfo.environment["TS_BOT"] != nil) { dismiss() }
-                .ignoresSafeArea(.container, edges: .bottom)
+            // the strip under the status bar follows the scene's sky (checked twice a second)
+            TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+                ScenePalette.current(engine).sky[0].ignoresSafeArea()
+            }
+            if let h = ProcessInfo.processInfo.environment["TS_SPLIT"].flatMap(Double.init) {
+                SplitPaneTest(engine: engine, height: h)
+            } else {
+                SurfGameView(engine: engine, running: true, mode: "solo", autoplay: ProcessInfo.processInfo.environment["TS_BOT"] != nil) { dismiss() }
+                    .ignoresSafeArea(.container, edges: .bottom)
+            }
         }
         .statusBarHidden(true)
         .onAppear {
+            // TS_SCENE=n starts in scene n; TS_POWER=magnet|double|shield|rocket grants one 3 s in
+            let env = ProcessInfo.processInfo.environment
+            if let n = env["TS_SCENE"].flatMap(Int.init) { engine.skip(toScene: n) }
+            if let name = env["TS_POWER"] {
+                Task {
+                    try? await Task.sleep(for: .seconds(3))
+                    for p in SurfEngine.Power.allCases where name.contains("\(p)") { engine.grant(p) }
+                }
+            }
             // TS_BOT=1: the debug autopilot plays; TS_BOT=restart: and restarts after every death.
             if let bot = ProcessInfo.processInfo.environment["TS_BOT"] {
                 engine.autopilot = true
@@ -416,6 +530,39 @@ struct GameScreen: View {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/// `TS_SOLO=1 TS_SPLIT=<height>`: the build pane as the Studio mounts it, at
+/// that height, with a player who has taken over and then does nothing. The
+/// run dies, the pane is unmounted and mounted again 8 s in (the game tucking
+/// away after a build and coming back) — the game-over card must come back.
+private struct SplitPaneTest: View {
+    let engine: SurfEngine
+    let height: Double
+    @State private var mounted = true
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Color(hex: 0x1C1B34)
+            if mounted {
+                SurfGameView(engine: engine, running: true, compact: height < 260, mode: "build")
+                    .frame(height: height)
+                    .clipped()
+            } else {
+                Color.gray.frame(height: height)
+            }
+        }
+        .ignoresSafeArea()
+        .onAppear {
+            engine.takenOver = true
+            Task {
+                try? await Task.sleep(for: .seconds(8))
+                mounted = false
+                try? await Task.sleep(for: .seconds(1))
+                mounted = true
             }
         }
     }

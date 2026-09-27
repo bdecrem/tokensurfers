@@ -69,10 +69,17 @@ export async function leaderboard(device: string | null, limit = 50): Promise<{ 
   return { top, you, surfers: count ?? top.length }
 }
 
+export const MAX_RUNS_PER_DAY = Number(process.env.SURF_MAX_RUNS_PER_DAY || 400)
+export class ScoreCap extends Error {}
+
 export async function submit(args: {
   device: string; handle: string; score: number; coins: number; distance: number; mode: string; version: string | null
 }): Promise<{ rank: number; best: number; top: boolean }> {
   const { device, handle } = args
+  // One device posts at most so many runs a day (a run is 20 s at the very least).
+  const dayStart = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z').toISOString()
+  const { count } = await db().from('surf_scores').select('id', { count: 'exact', head: true }).eq('device_id', device).gte('created_at', dayStart)
+  if ((count ?? 0) >= MAX_RUNS_PER_DAY) throw new ScoreCap(`${MAX_RUNS_PER_DAY} runs posted today — the board is full for you until tomorrow`)
   // A renamed surfer keeps one name on the board.
   const { error: e1 } = await db().from('surf_scores').update({ handle }).eq('device_id', device).neq('handle', handle)
   if (e1) throw new Error(e1.message)

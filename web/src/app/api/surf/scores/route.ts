@@ -10,7 +10,7 @@
 // produce for the run's distance and coins.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { cleanHandle, leaderboard, plausible, submit, validDevice } from '@/lib/surf/scores'
+import { cleanHandle, leaderboard, plausible, submit, validDevice, ScoreCap } from '@/lib/surf/scores'
 
 export const runtime = 'nodejs'
 
@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
     })
     return NextResponse.json(result)
   } catch (e) {
+    if (e instanceof ScoreCap) return err(e.message, 429)
     console.error('[surf/scores] write', (e as Error).message)
     return err('leaderboard unavailable', 502)
   }

@@ -17,7 +17,7 @@ const api = async (p, m = 'GET', body) => {
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 let build
-for (let i = 0; i < 40; i++) {
+for (let i = 0; i < 90; i++) {
   const d = await api(`/builds?filter[app]=${APP}&filter[version]=${VER}&filter[preReleaseVersion.platform]=IOS`)
   build = d.data[0]; const st = build?.attributes.processingState
   console.log('build ' + VER + ':', st ?? 'not yet')
@@ -25,6 +25,7 @@ for (let i = 0; i < 40; i++) {
   if (st === 'FAILED' || st === 'INVALID') process.exit(1)
   await sleep(30000)
 }
+if (build?.attributes.processingState !== 'VALID') { console.error('build ' + VER + ' not processed after 45 min — rerun: node testflight/asc-submit.mjs ' + VER); process.exit(1) }
 const groups = (await api(`/apps/${APP}/betaGroups`)).data
 console.log('groups:', groups.map(g => g.attributes.name + (g.attributes.publicLinkEnabled ? ' (public: ' + g.attributes.publicLink + ')' : '')).join(', '))
 for (const g of groups.filter(g => g.attributes.publicLinkEnabled)) {

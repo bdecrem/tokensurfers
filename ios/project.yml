@@ -10,7 +10,7 @@ settings:
     SWIFT_VERSION: "5.9"
     DEVELOPMENT_TEAM: 274T5WCVD2
     MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "10"
+    CURRENT_PROJECT_VERSION: "17"
     SWIFT_STRICT_CONCURRENCY: minimal
 
 targets:
@@ -19,10 +19,39 @@ targets:
     platform: iOS
     sources:
       - path: TokenSurfers
+        excludes:
+          - App/Secrets.swift
+          - App/Secrets.swift.example
+      # Secrets.swift is gitignored. Listed as optional so the project references it
+      # even when it is missing, and made by the "Secrets.swift" phase below from
+      # Secrets.swift.example on a fresh clone, so clone -> open -> build just works.
+      - path: TokenSurfers/App/Secrets.swift
+        optional: true
+        group: TokenSurfers/App
+      - path: TokenSurfers/App/Secrets.swift.example
+        group: TokenSurfers/App
+        buildPhase: none
+    preBuildScripts:
+      - name: Secrets.swift
+        basedOnDependencyAnalysis: false
+        inputFiles:
+          - $(SRCROOT)/TokenSurfers/App/Secrets.swift.example
+        outputFiles:
+          - $(SRCROOT)/TokenSurfers/App/Secrets.swift
+        script: |
+          # Fresh clone: write Secrets.swift from the example. An existing one is never touched.
+          if [ ! -f "$SRCROOT/TokenSurfers/App/Secrets.swift" ]; then
+            cp "$SRCROOT/TokenSurfers/App/Secrets.swift.example" "$SRCROOT/TokenSurfers/App/Secrets.swift"
+            echo "note: wrote TokenSurfers/App/Secrets.swift from Secrets.swift.example; set backendURL and appKey there"
+          fi
     info:
       path: TokenSurfers/Info.plist
       properties:
         CFBundleDisplayName: Token Surfers
+        # XcodeGen's generated Info.plist otherwise pins these to 1 / 1.0, so the
+        # build number above never reached the phone (found 2026-09-24, build 10 read "1")
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
         UILaunchScreen:
           UIColorName: LaunchBackground
         UISupportedInterfaceOrientations:
